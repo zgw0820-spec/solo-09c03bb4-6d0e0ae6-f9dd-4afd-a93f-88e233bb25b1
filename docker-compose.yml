@@ -1,0 +1,55 @@
+name: config-svc-discovery
+
+services:
+  registry:
+    build: ./registry
+    ports:
+      - "8000:8000"          # 值班台网页: http://localhost:8000
+    environment:
+      DB_PATH: /data/registry.db
+    volumes:
+      - registry-data:/data  # SQLite 持久化: 重启后记录仍在, 但须重新确认才参与转发
+    restart: unless-stopped  # 网页上的"重启注册中心"依赖该策略拉起新进程
+
+  backend1:
+    build: ./backend
+    depends_on:
+      - registry
+    ports:
+      - "8001:8000"
+    environment:
+      REGISTRY_URL: http://registry:8000
+      SERVICE_NAME: config-service
+      INSTANCE_ID: config-1
+      ADVERTISE_ADDRESS: http://backend1:8000
+      LEASE_TTL: "8"
+      HEARTBEAT_INTERVAL: "2"
+      PRESET_CONFIG: >-
+        {"db_dsn":"postgres://db.internal:5432/app",
+         "cache":"redis://cache.internal:6379/0",
+         "feature_flags":{"new_ui":true},
+         "preset_by":"backend-1"}
+    restart: unless-stopped
+
+  backend2:
+    build: ./backend
+    depends_on:
+      - registry
+    ports:
+      - "8002:8000"
+    environment:
+      REGISTRY_URL: http://registry:8000
+      SERVICE_NAME: config-service
+      INSTANCE_ID: config-2
+      ADVERTISE_ADDRESS: http://backend2:8000
+      LEASE_TTL: "8"
+      HEARTBEAT_INTERVAL: "2"
+      PRESET_CONFIG: >-
+        {"db_dsn":"postgres://db.internal:5432/app",
+         "cache":"redis://cache.internal:6379/0",
+         "feature_flags":{"new_ui":false},
+         "preset_by":"backend-2"}
+    restart: unless-stopped
+
+volumes:
+  registry-data:
